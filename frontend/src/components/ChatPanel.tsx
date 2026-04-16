@@ -2,7 +2,7 @@
  * Chat panel component for personalized conversation
  */
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useLayoutEffect } from 'react';
 import { Card, Input, Button, Typography, Space, Avatar, Spin } from 'antd';
 import { SendOutlined, UserOutlined, RobotOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
@@ -31,15 +31,31 @@ export function ChatPanel({
 }: ChatPanelProps) {
   const [inputValue, setInputValue] = useState('');
   const [showProfileForm, setShowProfileForm] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  /** 用户是否停留在聊天区底部（流式输出时仅在此为 true 时自动下滚，避免与框内回看冲突） */
+  const stickToBottomRef = useRef(true);
 
-  // Auto scroll to bottom
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const updateStickFromScroll = () => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+    stickToBottomRef.current = gap < 80;
+  };
+
+  /**
+   * 只设置消息区容器的 scrollTop，禁止使用 scrollIntoView：
+   * scrollIntoView 会滚动所有可滚动祖先（含整页 Layout），流式时每帧都会把页面拉回底部，
+   * 导致左侧主内容无法用滚轮向上查看。
+   */
+  useLayoutEffect(() => {
+    const el = messagesContainerRef.current;
+    if (!el || !stickToBottomRef.current) return;
+    el.scrollTop = el.scrollHeight;
   }, [messages, streamingContent]);
 
   const handleSend = () => {
     if (!inputValue.trim() || isStreaming) return;
+    stickToBottomRef.current = true;
     onSendMessage(inputValue.trim(), userProfile);
     setInputValue('');
   };
@@ -79,10 +95,13 @@ export function ChatPanel({
 
       {/* Messages Area */}
       <div
+        ref={messagesContainerRef}
+        onScroll={updateStickFromScroll}
         style={{
           flex: 1,
           overflowY: 'auto',
           padding: 16,
+          overscrollBehavior: 'contain',
         }}
       >
         {messages.length === 0 && !streamingContent && (
@@ -193,7 +212,6 @@ export function ChatPanel({
           </div>
         )}
 
-        <div ref={messagesEndRef} />
       </div>
 
       {/* Input Area */}

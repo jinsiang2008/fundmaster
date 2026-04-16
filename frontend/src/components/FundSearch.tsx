@@ -3,7 +3,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { AutoComplete, Input, Typography } from 'antd';
+import { AutoComplete, Input, Typography, Spin } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { useSearchFunds } from '../hooks/useFund';
 import type { FundSearchResult } from '../types/fund';
@@ -13,11 +13,21 @@ const { Text } = Typography;
 interface FundSearchProps {
   onSelect: (fund: FundSearchResult) => void;
   placeholder?: string;
+  /** 与后端 category 一致：all / stock / bond / mixed / index / money / qdii */
+  category?: string;
 }
 
-export function FundSearch({ onSelect, placeholder = '搜索基金名称或代码' }: FundSearchProps) {
+export function FundSearch({
+  onSelect,
+  placeholder = '搜索基金名称或代码',
+  category = 'all',
+}: FundSearchProps) {
   const [searchText, setSearchText] = useState('');
-  const { data: results, isLoading } = useSearchFunds(searchText, searchText.length >= 2);
+  const { data: results, isLoading } = useSearchFunds(
+    searchText,
+    searchText.length >= 2,
+    category
+  );
 
   const handleSearch = useCallback((value: string) => {
     setSearchText(value);
@@ -59,7 +69,7 @@ export function FundSearch({ onSelect, placeholder = '搜索基金名称或代�
         size="large"
         placeholder={placeholder}
         prefix={<SearchOutlined />}
-        loading={isLoading}
+        suffix={isLoading ? <Spin size="small" /> : undefined}
         allowClear
       />
     </AutoComplete>

@@ -18,24 +18,21 @@ import {
   Alert,
   Spin,
   Empty,
+  Switch,
 } from 'antd';
-import {
-  HomeOutlined,
-  DeleteOutlined,
-  PlusOutlined,
-  ThunderboltOutlined,
-} from '@ant-design/icons';
+import { HomeOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
-import { FundSearch, CompareRadar } from '../components';
+import { FundSearch, CompareRadar, FundQuickListsPanel, SubtleHint } from '../components';
 import { useCompareFunds } from '../hooks/useFund';
 import type { FundSearchResult, FundMetrics } from '../types/fund';
 
 const { Content } = Layout;
-const { Title, Paragraph } = Typography;
+const { Paragraph } = Typography;
 
 export function Compare() {
   const navigate = useNavigate();
   const [selectedFunds, setSelectedFunds] = useState<FundSearchResult[]>([]);
+  const [includeAi, setIncludeAi] = useState(true);
   const compareMutation = useCompareFunds();
 
   const handleSelectFund = useCallback((fund: FundSearchResult) => {
@@ -56,8 +53,9 @@ export function Compare() {
     if (selectedFunds.length < 2) return;
     compareMutation.mutate({
       fund_codes: selectedFunds.map((f) => f.code),
+      include_ai: includeAi,
     });
-  }, [selectedFunds, compareMutation]);
+  }, [selectedFunds, compareMutation, includeAi]);
 
   const metricsColumns = [
     {
@@ -107,7 +105,7 @@ export function Compare() {
       <Content style={{ padding: 24 }}>
         {/* Breadcrumb */}
         <Breadcrumb
-          style={{ marginBottom: 16 }}
+          style={{ marginBottom: 12 }}
           items={[
             {
               title: (
@@ -120,6 +118,12 @@ export function Compare() {
           ]}
         />
 
+        <SubtleHint>
+          除搜索外，可从下方「自选 / 最近浏览」一键加入对比（宽屏在页面右侧）；列表与首页、基金详情同步，多标签页也会更新。
+        </SubtleHint>
+
+        <Row gutter={[24, 24]}>
+          <Col xs={24} xl={17}>
         <Row gutter={[24, 24]}>
           {/* Left: Fund Selection */}
           <Col xs={24} lg={8}>
@@ -163,17 +167,40 @@ export function Compare() {
                 </Paragraph>
               )}
 
-              <Button
-                type="primary"
-                icon={<ThunderboltOutlined />}
-                onClick={handleCompare}
-                loading={compareMutation.isPending}
-                disabled={selectedFunds.length < 2}
-                block
-                style={{ marginTop: 16 }}
-              >
-                开始对比分析
-              </Button>
+              <Space direction="vertical" size="small" style={{ width: '100%', marginTop: 16 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <span style={{ fontSize: 13, color: 'rgba(0,0,0,0.65)' }}>生成 AI 文字解读</span>
+                  <Switch
+                    checked={includeAi}
+                    onChange={setIncludeAi}
+                    checkedChildren="开"
+                    unCheckedChildren="关"
+                  />
+                </div>
+                <Paragraph type="secondary" style={{ marginBottom: 0, fontSize: 12 }}>
+                  {includeAi
+                    ? '将调用大模型生成对比结论，可能需数十秒，前端最长等待 2 分钟。'
+                    : '仅拉取净值并计算指标与雷达图，通常数秒至十余秒完成。'}
+                </Paragraph>
+                <Button
+                  type="primary"
+                  icon={<ThunderboltOutlined />}
+                  onClick={handleCompare}
+                  loading={compareMutation.isPending}
+                  disabled={selectedFunds.length < 2}
+                  block
+                >
+                  {includeAi ? '开始对比分析' : '快速对比（仅指标）'}
+                </Button>
+              </Space>
             </Card>
           </Col>
 
@@ -183,8 +210,10 @@ export function Compare() {
               <Card>
                 <div style={{ textAlign: 'center', padding: 60 }}>
                   <Spin size="large" />
-                  <Paragraph style={{ marginTop: 16 }}>
-                    AI 正在分析对比数据...
+                  <Paragraph type="secondary" style={{ marginTop: 16 }}>
+                    {includeAi
+                      ? '正在拉取净值并生成 AI 对比摘要，一般十余秒至 2 分钟内完成；超时请检查网络与 API。'
+                      : '正在拉取净值并计算指标，请稍候…'}
                   </Paragraph>
                 </div>
               </Card>
@@ -256,6 +285,23 @@ export function Compare() {
                 />
               </Card>
             )}
+          </Col>
+        </Row>
+          </Col>
+
+          <Col xs={24} xl={7}>
+            <FundQuickListsPanel
+              onApply={handleSelectFund}
+              applyLabel="加入对比"
+              isApplyDisabled={(f) =>
+                selectedFunds.length >= 5 || !!selectedFunds.find((x) => x.code === f.code)
+              }
+              getApplyDisabledReason={(f) => {
+                if (selectedFunds.length >= 5) return '已达 5 只上限';
+                if (selectedFunds.find((x) => x.code === f.code)) return '已在对比列表中';
+                return undefined;
+              }}
+            />
           </Col>
         </Row>
       </Content>

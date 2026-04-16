@@ -1,46 +1,44 @@
 """Chat service for managing conversation sessions."""
 
-from datetime import datetime
-from typing import AsyncGenerator, Optional
-from uuid import uuid4
+from collections.abc import AsyncGenerator
 
 from app.schemas.chat import (
-    ChatSession,
     ChatMessage,
+    ChatSession,
     MessageRole,
     UserProfile,
 )
-from app.services.llm_service import get_llm_service, LLMService
-from app.services.data_fetcher import get_data_fetcher, DataFetcher
-from app.services.metrics import get_metrics_calculator, MetricsCalculator
+from app.services.data_fetcher import DataFetcher, get_data_fetcher
+from app.services.llm_service import LLMService, get_llm_service
+from app.services.metrics import MetricsCalculator, get_metrics_calculator
 
 
 class ChatService:
     """
     Chat service managing conversation sessions and context.
-    
-    Note: In V1, sessions are stored in memory. 
+
+    Note: In V1, sessions are stored in memory.
     For production, use Redis or database.
     """
-    
+
     def __init__(self):
         self._sessions: dict[str, ChatSession] = {}
         self._data_fetcher: DataFetcher = get_data_fetcher()
         self._metrics: MetricsCalculator = get_metrics_calculator()
-        self._llm: Optional[LLMService] = get_llm_service()
-    
+        self._llm: LLMService | None = get_llm_service()
+
     async def create_session(
         self,
         fund_code: str,
-        user_profile: Optional[UserProfile] = None,
+        user_profile: UserProfile | None = None,
     ) -> ChatSession:
         """
         Create a new chat session for a fund.
-        
+
         Args:
             fund_code: Fund code to analyze
             user_profile: Optional user investment profile
-            
+
         Returns:
             New ChatSession with fund context loaded
         """
@@ -48,16 +46,20 @@ class ChatService:
         fund_info = await self._data_fetcher.get_fund_info(fund_code)
         if not fund_info:
             raise ValueError(f"Fund not found: {fund_code}")
-        
+
         # Get NAV history and calculate metrics
         nav_history = await self._data_fetcher.get_nav_history(fund_code, "3y")
         metrics = None
         if nav_history:
-            metrics = self._metrics.calculate_metrics(nav_history)
-        
+            try:
+                metrics = self._metrics.calculate_metrics(nav_history)
+            except Exception as e:
+                print(f"⚠ metrics calculation skipped for {fund_code}: {e}")
+                metrics = None
+
         # Get holdings
         holdings = await self._data_fetcher.get_holdings(fund_code)
-        
+
         # Build context
         fund_context = {
             "code": fund_code,
@@ -71,7 +73,7 @@ class ChatService:
             "management_fee": fund_info.management_fee,
             "custody_fee": fund_info.custody_fee,
         }
-        
+
         if metrics:
             fund_context["metrics"] = {
                 "return_1m": metrics.return_1m,
@@ -85,27 +87,24 @@ class ChatService:
                 "volatility": metrics.volatility,
                 "sharpe_ratio": metrics.sharpe_ratio,
             }
-        
+
         if holdings and holdings.stock_holdings:
-            fund_context["top_holdings"] = [
-                {"name": h.name, "ratio": h.ratio}
-                for h in holdings.stock_holdings[:10]
-            ]
-        
+            fund_context["top_holdings"] = [{"name": h.name, "ratio": h.ratio} for h in holdings.stock_holdings[:10]]
+
         # Create session
         session = ChatSession(
             fund_code=fund_code,
             fund_context=fund_context,
             user_profile=user_profile,
         )
-        
+
         self._sessions[session.session_id] = session
         return session
-    
-    def get_session(self, session_id: str) -> Optional[ChatSession]:
+
+    def get_session(self, session_id: str) -> ChatSession | None:
         """Get existing session by ID."""
         return self._sessions.get(session_id)
-    
+
     def update_user_profile(
         self,
         session_id: str,
@@ -115,48 +114,45 @@ class ChatService:
         session = self._sessions.get(session_id)
         if not session:
             return False
-        
+
         session.user_profile = user_profile
         return True
-    
+
     async def send_message(
         self,
         session_id: str,
         message: str,
-        user_profile: Optional[UserProfile] = None,
+        user_profile: UserProfile | None = None,
     ) -> str:
         """
         Send a message and get response.
-        
+
         Args:
             session_id: Session ID
             message: User message
             user_profile: Optional user profile (updates session if provided)
-            
+
         Returns:
             Assistant response
         """
         session = self._sessions.get(session_id)
         if not session:
             raise ValueError(f"Session not found: {session_id}")
-        
+
         if not self._llm:
             raise ValueError("LLM service not available. Check API key configuration.")
-        
+
         # Update profile if provided
         if user_profile:
             session.user_profile = user_profile
-        
+
         # Add user message to history
         user_msg = ChatMessage(role=MessageRole.USER, content=message)
         session.messages.append(user_msg)
-        
+
         # Prepare context messages (limit to last 10 for context window)
-        context_messages = [
-            {"role": msg.role.value, "content": msg.content}
-            for msg in session.messages[-10:]
-        ]
-        
+        context_messages = [{"role": msg.role.value, "content": msg.content} for msg in session.messages[-10:]]
+
         # Get profile dict if available
         profile_dict = None
         if session.user_profile:
@@ -165,7 +161,7 @@ class ChatService:
                 "purpose": session.user_profile.purpose.value,
                 "horizon": session.user_profile.horizon.value,
             }
-        
+
         # Generate response
         response = await self._llm.smart_chat(
             message=message,
@@ -174,46 +170,43 @@ class ChatService:
             user_profile=profile_dict,
             stream=False,
         )
-        
+
         # Add assistant message to history
         assistant_msg = ChatMessage(role=MessageRole.ASSISTANT, content=response)
         session.messages.append(assistant_msg)
-        
+
         return response
-    
+
     async def send_message_stream(
         self,
         session_id: str,
         message: str,
-        user_profile: Optional[UserProfile] = None,
+        user_profile: UserProfile | None = None,
     ) -> AsyncGenerator[str, None]:
         """
         Send a message and get streaming response.
-        
+
         Yields:
             String chunks of the response
         """
         session = self._sessions.get(session_id)
         if not session:
             raise ValueError(f"Session not found: {session_id}")
-        
+
         if not self._llm:
             raise ValueError("LLM service not available. Check API key configuration.")
-        
+
         # Update profile if provided
         if user_profile:
             session.user_profile = user_profile
-        
+
         # Add user message to history
         user_msg = ChatMessage(role=MessageRole.USER, content=message)
         session.messages.append(user_msg)
-        
+
         # Prepare context messages
-        context_messages = [
-            {"role": msg.role.value, "content": msg.content}
-            for msg in session.messages[-10:]
-        ]
-        
+        context_messages = [{"role": msg.role.value, "content": msg.content} for msg in session.messages[-10:]]
+
         # Get profile dict
         profile_dict = None
         if session.user_profile:
@@ -222,30 +215,29 @@ class ChatService:
                 "purpose": session.user_profile.purpose.value,
                 "horizon": session.user_profile.horizon.value,
             }
-        
+
         # Generate streaming response
         full_response = ""
-        async for chunk in await self._llm.smart_chat(
+        async for chunk in self._llm.smart_chat_stream(
             message=message,
             context_messages=context_messages[:-1],
             fund_context=session.fund_context,
             user_profile=profile_dict,
-            stream=True,
         ):
             full_response += chunk
             yield chunk
-        
+
         # Add complete response to history
         assistant_msg = ChatMessage(role=MessageRole.ASSISTANT, content=full_response)
         session.messages.append(assistant_msg)
-    
+
     def get_messages(self, session_id: str) -> list[ChatMessage]:
         """Get all messages for a session."""
         session = self._sessions.get(session_id)
         if not session:
             return []
         return session.messages
-    
+
     def delete_session(self, session_id: str) -> bool:
         """Delete a session."""
         if session_id in self._sessions:
@@ -255,7 +247,7 @@ class ChatService:
 
 
 # Singleton instance
-_chat_service: Optional[ChatService] = None
+_chat_service: ChatService | None = None
 
 
 def get_chat_service() -> ChatService:

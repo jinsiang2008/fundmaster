@@ -6,7 +6,7 @@ import { Card, Tag, Typography, Spin, Button, Alert, Divider } from 'antd';
 import { RobotOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { FundAnalysisReport } from '../types/fund';
 
-const { Title, Text, Paragraph } = Typography;
+const { Paragraph } = Typography;
 
 interface AnalysisReportProps {
   report?: FundAnalysisReport;

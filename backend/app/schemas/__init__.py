@@ -1,19 +1,19 @@
 """Pydantic schemas for API request/response models."""
 
-from app.schemas.fund import (
-    FundBasicInfo,
-    FundSearchResult,
-    FundNAVHistory,
-    FundHolding,
-    FundMetrics,
-    FundAnalysisReport,
-)
 from app.schemas.chat import (
-    ChatSession,
     ChatMessage,
-    UserProfile,
     ChatRequest,
     ChatResponse,
+    ChatSession,
+    UserProfile,
+)
+from app.schemas.fund import (
+    FundAnalysisReport,
+    FundBasicInfo,
+    FundHolding,
+    FundMetrics,
+    FundNAVHistory,
+    FundSearchResult,
 )
 
 __all__ = [

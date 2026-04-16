@@ -2,7 +2,7 @@
  * Fund detail page with analysis and chat
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Layout,
@@ -14,8 +14,9 @@ import {
   Spin,
   Alert,
   message,
+  Space,
 } from 'antd';
-import { HomeOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import { HomeOutlined, ArrowLeftOutlined, StarOutlined, StarFilled } from '@ant-design/icons';
 import {
   FundCard,
   PerformanceChart,
@@ -30,6 +31,7 @@ import {
   useFundMetrics,
 } from '../hooks/useFund';
 import { useChat } from '../hooks/useChat';
+import { useWatchlist, useRecentFunds } from '../hooks/useLocalFundLists';
 import { apiClient } from '../api/client';
 import type { UserProfile } from '../types/chat';
 
@@ -45,11 +47,23 @@ export function FundDetail() {
   const [analysisError, setAnalysisError] = useState<Error | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | undefined>();
 
+  const { toggleWatchlist, isInWatchlist } = useWatchlist();
+  const { recordVisit } = useRecentFunds();
+
   // Data fetching
   const { data: fundInfo, isLoading: infoLoading, error: infoError } = useFundInfo(fundCode || '');
   const { data: navHistory, isLoading: navLoading } = useFundNAVHistory(fundCode || '', navPeriod);
   const { data: holdings, isLoading: holdingsLoading } = useFundHoldings(fundCode || '');
   const { data: metrics } = useFundMetrics(fundCode || '');
+
+  useEffect(() => {
+    if (!fundInfo) return;
+    recordVisit({
+      code: fundInfo.code,
+      name: fundInfo.name,
+      type: fundInfo.type || '',
+    });
+  }, [fundInfo, recordVisit]);
 
   // Chat hook
   const {
@@ -107,7 +121,11 @@ export function FundDetail() {
           <Alert
             type="error"
             message="加载失败"
-            description={`无法加载基金信息: ${fundCode}`}
+            description={
+              infoError
+                ? `${(infoError as Error).message || String(infoError)}（基金: ${fundCode}）`
+                : `无法加载基金信息: ${fundCode}`
+            }
             action={
               <Button onClick={() => navigate('/')}>返回首页</Button>
             }
@@ -183,15 +201,36 @@ export function FundDetail() {
           ]}
         />
 
-        {/* Back button */}
-        <Button
-          type="text"
-          icon={<ArrowLeftOutlined />}
-          onClick={() => navigate(-1)}
-          style={{ marginBottom: 16 }}
-        >
-          返回
-        </Button>
+        {/* Back & watchlist */}
+        <Space style={{ marginBottom: 16 }} wrap>
+          <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>
+            返回
+          </Button>
+          <Button
+            type={isInWatchlist(fundInfo.code) ? 'default' : 'primary'}
+            icon={
+              isInWatchlist(fundInfo.code) ? (
+                <StarFilled style={{ color: '#faad14' }} />
+              ) : (
+                <StarOutlined />
+              )
+            }
+            onClick={() => {
+              const wasStarred = isInWatchlist(fundInfo.code);
+              toggleWatchlist({
+                code: fundInfo.code,
+                name: fundInfo.name,
+                type: fundInfo.type || '',
+              });
+              message.success(wasStarred ? '已从自选移除' : '已加入自选');
+            }}
+          >
+            {isInWatchlist(fundInfo.code) ? '已自选' : '加自选'}
+          </Button>
+          <Button type="link" onClick={() => navigate('/calculator')}>
+            定投测算
+          </Button>
+        </Space>
 
         <Row gutter={[24, 24]}>
           {/* Left: Fund Info & Tabs */}

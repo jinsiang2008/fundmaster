@@ -84,12 +84,15 @@ export function useChat(fundCode: string) {
         setMessages((prev) => [...prev, assistantMessage]);
       } catch (error) {
         console.error('Chat stream error:', error);
-        // Add error message
+        const hint =
+          error instanceof Error && error.message
+            ? error.message
+            : '抱歉，发生了错误，请稍后重试。';
         setMessages((prev) => [
           ...prev,
           {
             role: 'assistant',
-            content: '抱歉，发生了错误，请稍后重试。',
+            content: `抱歉，发生了错误：${hint}`,
             timestamp: new Date().toISOString(),
           },
         ]);

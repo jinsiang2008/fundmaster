@@ -1,0 +1,15 @@
+---
+description: 部署与运维关键事实
+globs: docker-compose*.yml,**/Dockerfile*,**/nginx.conf,scripts/**
+alwaysApply: false
+---
+
+- 开发: docker-compose.yml（backend 热重载 + frontend dev server）
+- 生产: docker-compose.prod.yml（Nginx 同域反代，静态资源 + /api 转发）
+- 环境变量: deploy.env（生产），backend/.env（开发）
+- Nginx: frontend/nginx.conf，/api 反代到 backend:8000，已关闭 proxy_buffering（SSE 需要）
+- 后端镜像: python:3.11-slim，入口 uvicorn app.main:app
+- 前端镜像: Node 构建阶段 + nginx:alpine 运行阶段
+- 远端部署: scripts/deploy-remote-192.sh（rsync 方式）
+- 健康检查: GET /health → {"status": "healthy"}
+- 关键环境变量: DEEPSEEK_API_KEY, LLM_PROVIDER, CORS_ORIGINS, HTTP_PORT

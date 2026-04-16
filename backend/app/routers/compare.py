@@ -1,12 +1,15 @@
 """Fund comparison API endpoints."""
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException
 
 from app.schemas.fund import FundCompareRequest, FundCompareResult, FundMetrics
 from app.services.data_fetcher import get_data_fetcher
-from app.services.metrics import get_metrics_calculator
-from app.services.llm_service import get_llm_service
 from app.services.llm_prompts import FUND_COMPARE_PROMPT, format_fund_for_compare
+from app.services.llm_service import get_llm_service
+from app.services.metrics import get_metrics_calculator
+from app.services.risk_labels import enrich_metrics_with_risk_labels
 
 router = APIRouter()
 
@@ -15,72 +18,69 @@ router = APIRouter()
 async def compare_funds(request: FundCompareRequest):
     """
     多基金对比分析。
-    
+
     支持2-5只基金同时对比，返回对比数据和AI分析。
     """
     fetcher = get_data_fetcher()
     calculator = get_metrics_calculator()
     llm = get_llm_service()
-    
-    funds_data = []
-    metrics_list = []
-    
-    # Fetch data for all funds
-    for code in request.fund_codes:
+
+    async def _load_one(code: str) -> tuple[FundMetrics, dict]:
         info = await fetcher.get_fund_info(code)
         if not info:
             raise HTTPException(status_code=404, detail=f"基金不存在: {code}")
-        
         history = await fetcher.get_nav_history(code, "3y")
-        metrics = calculator.calculate_metrics(history, info.name) if history else FundMetrics(
-            code=code, name=info.name
+        metrics = (
+            calculator.calculate_metrics(history, info.name) if history else FundMetrics(code=code, name=info.name)
         )
-        
-        metrics_list.append(metrics)
-        funds_data.append({
+        metrics = enrich_metrics_with_risk_labels(metrics, info.type or "")
+        row = {
             "code": code,
             "name": info.name,
             "type": info.type,
             "aum": info.aum,
             "manager": info.manager,
             "metrics": metrics.model_dump(),
-        })
-    
+        }
+        return metrics, row
+
+    pairs = await asyncio.gather(*(_load_one(c) for c in request.fund_codes))
+    metrics_list = [p[0] for p in pairs]
+    funds_data = [p[1] for p in pairs]
+
     # Build radar chart data
     radar_data = _build_radar_data(metrics_list)
-    
+
     # Generate AI comparison if LLM available
     analysis = ""
     recommendation = ""
-    
-    if llm:
+
+    if llm and request.include_ai:
         # Format funds for prompt
-        funds_text = "\n\n".join([
-            format_fund_for_compare(f, i + 1)
-            for i, f in enumerate(funds_data)
-        ])
-        
+        funds_text = "\n\n".join([format_fund_for_compare(f, i + 1) for i, f in enumerate(funds_data)])
+
         prompt = FUND_COMPARE_PROMPT.format(
             num_funds=len(funds_data),
             funds_data=funds_text,
         )
-        
+
         response = await llm.generate(
             task_type="compare_funds",
             messages=[
                 {"role": "system", "content": "你是专业的基金投资顾问，请提供客观的对比分析。"},
                 {"role": "user", "content": prompt},
             ],
+            max_tokens=2048,
         )
-        
+
         analysis = response.choices[0].message.content
-        
+
         # Try to extract recommendation
         for fund in funds_data:
             if fund["name"] in analysis and "推荐" in analysis:
                 recommendation = fund["code"]
                 break
-    
+
     return FundCompareResult(
         funds=metrics_list,
         radar_data=radar_data,
@@ -92,12 +92,12 @@ async def compare_funds(request: FundCompareRequest):
 def _build_radar_data(metrics_list: list[FundMetrics]) -> dict:
     """
     Build radar chart data for fund comparison.
-    
+
     Normalizes metrics to 0-100 scale for visualization.
     """
     if not metrics_list:
         return {}
-    
+
     # Define radar dimensions
     dimensions = [
         {"name": "收益能力", "key": "return_score"},
@@ -106,9 +106,9 @@ def _build_radar_data(metrics_list: list[FundMetrics]) -> dict:
         {"name": "夏普比率", "key": "sharpe_score"},
         {"name": "性价比", "key": "value_score"},
     ]
-    
+
     radar_series = []
-    
+
     for metrics in metrics_list:
         # Calculate scores (0-100)
         return_score = _normalize_return(metrics.return_1y)
@@ -116,19 +116,21 @@ def _build_radar_data(metrics_list: list[FundMetrics]) -> dict:
         risk_score = _normalize_drawdown(metrics.max_drawdown)
         sharpe_score = _normalize_sharpe(metrics.sharpe_ratio)
         value_score = (return_score + risk_score) / 2  # Simple value metric
-        
-        radar_series.append({
-            "name": metrics.name,
-            "code": metrics.code,
-            "values": [
-                return_score,
-                stability_score,
-                risk_score,
-                sharpe_score,
-                value_score,
-            ],
-        })
-    
+
+        radar_series.append(
+            {
+                "name": metrics.name,
+                "code": metrics.code,
+                "values": [
+                    return_score,
+                    stability_score,
+                    risk_score,
+                    sharpe_score,
+                    value_score,
+                ],
+            }
+        )
+
     return {
         "dimensions": [d["name"] for d in dimensions],
         "series": radar_series,

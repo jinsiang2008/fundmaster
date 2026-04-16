@@ -1,0 +1,16 @@
+---
+description: 后端 Python/FastAPI 编码规范
+globs: backend/**/*.py
+alwaysApply: false
+---
+
+- 使用 Python 3.11+ 语法（type hints 用 `str | None` 而非 `Optional[str]`）
+- 函数必须有类型标注（参数 + 返回值）
+- API 端点必须在 schemas/ 定义 Pydantic 请求/响应模型
+- 外部数据抓取统一经过 DataFetcher（services/data_fetcher.py）
+- LLM 调用统一经过 llm_service.py，使用 TASK_MODEL_MAPPING 路由模型
+- 新 router 在 main.py 中注册，遵循 /api/{resource} 路径格式
+- 流式响应使用 StreamingResponse + SSE 格式
+- 配置通过 config.py 的 Settings 管理，不要硬编码
+- 异常用 HTTPException 抛出，包含明确的 status_code 和 detail
+- lint: `ruff check app/ --fix && ruff format app/`

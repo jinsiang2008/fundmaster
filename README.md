@@ -91,6 +91,16 @@ npm run dev
 
 ✅ 前端启动：http://localhost:5173
 
+### 远端服务器部署（Docker）
+
+使用生产编排与 Nginx 同域反代，见 **[DEPLOY.md](DEPLOY.md)**：
+
+```bash
+cp deploy.env.example deploy.env
+# 编辑 deploy.env 填入 DEEPSEEK_API_KEY
+docker compose --env-file deploy.env -f docker-compose.prod.yml up -d --build
+```
+
 ### 3️⃣ 开始使用
 
 1. 打开浏览器访问 http://localhost:5173

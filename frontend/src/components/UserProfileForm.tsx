@@ -3,7 +3,7 @@
  */
 
 import { Form, Select, Button, Space, Typography } from 'antd';
-import type { UserProfile, RiskLevel, InvestmentPurpose, InvestmentHorizon } from '../types/chat';
+import type { UserProfile } from '../types/chat';
 import { RISK_LEVEL_MAP, PURPOSE_MAP, HORIZON_MAP } from '../types/chat';
 
 const { Text } = Typography;

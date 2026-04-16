@@ -14,6 +14,10 @@ import type {
   RealtimeEstimate,
   FundCompareRequest,
   FundCompareResult,
+  DCASimulateRequest,
+  DCASimulateResponse,
+  FundRecommendRequest,
+  FundRecommendResponse,
 } from '../types/fund';
 import type {
   ChatRequest,
@@ -28,13 +32,20 @@ import type {
 // In production, use the environment variable
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
+/** 普通接口（与后端默认 30s 以内一致） */
+const DEFAULT_TIMEOUT_MS = 30_000;
+/**
+ * 含 LLM 或多基金串行拉数的请求；需与后端 httpx 超时（如 120s）对齐，避免「后端仍在算、前端已超时」。
+ */
+const LONG_REQUEST_TIMEOUT_MS = 120_000;
+
 class ApiClient {
   private client: AxiosInstance;
 
   constructor() {
     this.client = axios.create({
       baseURL: API_BASE_URL,
-      timeout: 30000,
+      timeout: DEFAULT_TIMEOUT_MS,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -43,10 +54,38 @@ class ApiClient {
 
   // ==================== Fund APIs ====================
 
-  async searchFunds(query: string, limit = 20): Promise<FundSearchResult[]> {
-    const { data } = await this.client.get<FundSearchResult[]>('/api/funds/search', {
-      params: { q: query, limit },
+  async getFeaturedFunds(limit = 8): Promise<FundSearchResult[]> {
+    const { data } = await this.client.get<FundSearchResult[]>('/api/funds/featured', {
+      params: { limit },
     });
+    return data;
+  }
+
+  async searchFunds(
+    query: string,
+    limit = 20,
+    category?: string
+  ): Promise<FundSearchResult[]> {
+    const { data } = await this.client.get<FundSearchResult[]>('/api/funds/search', {
+      params: {
+        q: query,
+        limit,
+        ...(category && category !== 'all' ? { category } : {}),
+      },
+    });
+    return data;
+  }
+
+  async simulateDCA(body: DCASimulateRequest): Promise<DCASimulateResponse> {
+    const { data } = await this.client.post<DCASimulateResponse>(
+      '/api/funds/tools/dca-simulate',
+      body
+    );
+    return data;
+  }
+
+  async recommendFunds(body: FundRecommendRequest): Promise<FundRecommendResponse> {
+    const { data } = await this.client.post<FundRecommendResponse>('/api/funds/recommend', body);
     return data;
   }
 
@@ -83,7 +122,8 @@ class ApiClient {
 
   async getFundAnalysis(fundCode: string): Promise<FundAnalysisReport> {
     const { data } = await this.client.get<FundAnalysisReport>(
-      `/api/funds/${fundCode}/analysis`
+      `/api/funds/${fundCode}/analysis`,
+      { timeout: LONG_REQUEST_TIMEOUT_MS }
     );
     return data;
   }
@@ -126,7 +166,13 @@ class ApiClient {
   // ==================== Compare APIs ====================
 
   async compareFunds(request: FundCompareRequest): Promise<FundCompareResult> {
-    const { data } = await this.client.post<FundCompareResult>('/api/compare', request);
+    const timeout =
+      request.include_ai === false ? DEFAULT_TIMEOUT_MS : LONG_REQUEST_TIMEOUT_MS;
+    const { data } = await this.client.post<FundCompareResult>(
+      '/api/compare',
+      request,
+      { timeout }
+    );
     return data;
   }
 
@@ -156,7 +202,24 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      // 只能读一次 body：先 text，再 JSON.parse，避免 json() 失败后再 text() 报错
+      const raw = await response.text();
+      let detail = raw;
+      try {
+        const errBody = JSON.parse(raw) as { detail?: unknown };
+        if (typeof errBody.detail === 'string') {
+          detail = errBody.detail;
+        } else if (Array.isArray(errBody.detail)) {
+          detail = errBody.detail.map((x) => JSON.stringify(x)).join('; ');
+        } else if (errBody.detail != null) {
+          detail = JSON.stringify(errBody.detail);
+        }
+      } catch {
+        /* 非 JSON 时用原始文本 */
+      }
+      throw new Error(
+        detail ? `请求失败 (${response.status}): ${detail}` : `请求失败: HTTP ${response.status}`
+      );
     }
 
     // Get session ID from header
@@ -179,7 +242,11 @@ class ApiClient {
       for (const line of lines) {
         if (line.startsWith('data: ')) {
           const data = line.slice(6);
-          if (data !== '[DONE]' && !data.startsWith('[ERROR]')) {
+          if (data.startsWith('[ERROR]')) {
+            const msg = data.slice('[ERROR]'.length).trim();
+            throw new Error(msg || '对话服务返回错误');
+          }
+          if (data !== '[DONE]') {
             onChunk(data);
           }
         }

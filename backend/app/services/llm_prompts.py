@@ -1,6 +1,5 @@
 """LLM prompt templates for fund analysis."""
 
-
 FUND_ANALYSIS_PROMPT = """你是一位专业的中国公募基金分析师。请用结构化的格式输出分析报告。
 
 ## 基金基本信息
@@ -85,7 +84,9 @@ FUND_COMPARE_PROMPT = """你是一位专业的基金投资顾问，请对以下{
 4. **适合人群**：每只基金分别适合什么类型的投资者？
 5. **最终推荐**：如果只能选一只，推荐哪只？为什么？
 
-请用表格形式呈现关键指标对比，并给出清晰的结论。"""
+请用表格形式呈现关键指标对比，并给出清晰的结论。
+
+请控制篇幅：全文简明扼要，总字数建议不超过 1000 字。"""
 
 
 PERSONALIZED_ADVICE_PROMPT = """你是一位专业的基金投资顾问，正在为客户提供个性化建议。
@@ -120,13 +121,13 @@ def format_holdings_for_prompt(holdings: list) -> str:
     """Format holdings list for prompt."""
     if not holdings:
         return "暂无持仓数据"
-    
+
     lines = []
     for i, h in enumerate(holdings[:10], 1):
         name = h.get("name", "")
         ratio = h.get("ratio", 0)
         lines.append(f"{i}. {name}: {ratio}%")
-    
+
     return "\n".join(lines)
 
 
@@ -137,14 +138,16 @@ def format_fund_for_compare(fund_data: dict, index: int) -> str:
         f"- 类型: {fund_data.get('type', 'N/A')}",
         f"- 规模: {fund_data.get('aum', 'N/A')}亿",
     ]
-    
+
     if fund_data.get("metrics"):
         m = fund_data["metrics"]
-        lines.extend([
-            f"- 近1年收益: {m.get('return_1y', 'N/A')}%",
-            f"- 近3年收益: {m.get('return_3y', 'N/A')}%",
-            f"- 最大回撤: {m.get('max_drawdown', 'N/A')}%",
-            f"- 夏普比率: {m.get('sharpe_ratio', 'N/A')}",
-        ])
-    
+        lines.extend(
+            [
+                f"- 近1年收益: {m.get('return_1y', 'N/A')}%",
+                f"- 近3年收益: {m.get('return_3y', 'N/A')}%",
+                f"- 最大回撤: {m.get('max_drawdown', 'N/A')}%",
+                f"- 夏普比率: {m.get('sharpe_ratio', 'N/A')}",
+            ]
+        )
+
     return "\n".join(lines)

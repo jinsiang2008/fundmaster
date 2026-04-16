@@ -5,8 +5,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import get_settings
-from app.routers import funds, analysis, compare, chat
+from app.config import get_settings, warn_if_deepseek_key_env_overrides_dotenv
+from app.routers import analysis, chat, compare, funds
 
 
 @asynccontextmanager
@@ -21,15 +21,16 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
+    warn_if_deepseek_key_env_overrides_dotenv()
     settings = get_settings()
-    
+
     app = FastAPI(
         title="FundMaster API",
         description="AI-powered Chinese mutual fund analysis platform",
         version="1.0.0",
         lifespan=lifespan,
     )
-    
+
     # CORS middleware
     app.add_middleware(
         CORSMiddleware,
@@ -38,18 +39,18 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    
+
     # Include routers
     app.include_router(funds.router, prefix="/api/funds", tags=["funds"])
     app.include_router(analysis.router, prefix="/api/funds", tags=["analysis"])
     app.include_router(compare.router, prefix="/api", tags=["compare"])
     app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
-    
+
     @app.get("/health")
     async def health_check():
         """Health check endpoint."""
         return {"status": "healthy", "service": "fundmaster-api"}
-    
+
     return app
 
 
@@ -58,6 +59,7 @@ app = create_app()
 
 if __name__ == "__main__":
     import uvicorn
+
     settings = get_settings()
     uvicorn.run(
         "app.main:app",

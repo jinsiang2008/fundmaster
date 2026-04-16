@@ -1,0 +1,29 @@
+# 生产部署：docker compose -f docker-compose.prod.yml up -d --build
+# 详见仓库根目录 DEPLOY.md
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    expose:
+      - "8000"
+    environment:
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:?请在 .env 或环境中设置 DEEPSEEK_API_KEY}
+      LLM_PROVIDER: ${LLM_PROVIDER:-deepseek}
+      DEBUG: "false"
+      # 若前端与 API 不同域时需配置；同域反代可保留默认
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_URL: ""
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped

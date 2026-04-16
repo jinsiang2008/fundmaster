@@ -1,0 +1,14 @@
+---
+description: FundMaster 项目全局上下文与核心约定
+globs:
+alwaysApply: true
+---
+
+- 项目: FundMaster — AI 驱动的中国公募基金智能分析平台
+- 语言偏好: 代码/注释/变量用英文，UI 文案/用户可见文本用中文
+- 回复语言: 始终用中文（简体）回复
+- 架构: 前后端分离，FastAPI (Python 3.11) + Vite/React 19 (TypeScript)
+- 分层: config → schemas → services → routers → main（禁止反向依赖）
+- 安全: 绝不提交 .env / API Key / 密码到 Git
+- 数据流: 所有外部数据通过 backend 代理，前端不直接调外部 API
+- 参考 AGENTS.md 获取完整架构信息
