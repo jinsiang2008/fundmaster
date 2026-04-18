@@ -1,5 +1,5 @@
 ---
-description: 后端 Python/FastAPI 编码规范
+description: 后端 Python/FastAPI 规则、配置边界与模型路由约定
 globs: backend/**/*.py
 alwaysApply: false
 ---
@@ -8,9 +8,13 @@ alwaysApply: false
 - 函数必须有类型标注（参数 + 返回值）
 - API 端点必须在 schemas/ 定义 Pydantic 请求/响应模型
 - 外部数据抓取统一经过 DataFetcher（services/data_fetcher.py）
-- LLM 调用统一经过 llm_service.py，使用 TASK_MODEL_MAPPING 路由模型
+- LLM 调用统一经过 llm_service.py，使用 `task_type` 和 `TASK_MODEL_MAPPING` 路由模型
+- 除非用户明确要求，否则不要修改 `config.py` 中的 `TASK_MODEL_MAPPING`
+- 配置统一通过 `config.py` 的 Settings 管理；本地 env 事实来源是固定的 `backend/.env`
 - 新 router 在 main.py 中注册，遵循 /api/{resource} 路径格式
+- `featured`、`recommend`、`tools/dca-simulate` 是正式 API 面，不要当临时实验接口处理
+- 基金详情接口的 `FundBasicInfo.type` 可能为空；新增分类逻辑时不要假设它总是可用
 - 流式响应使用 StreamingResponse + SSE 格式
-- 配置通过 config.py 的 Settings 管理，不要硬编码
 - 异常用 HTTPException 抛出，包含明确的 status_code 和 detail
+- 若改动 API 面、模型路由或运行方式，同步更新 `AGENTS.md` / `docs/memory.md`
 - lint: `ruff check app/ --fix && ruff format app/`

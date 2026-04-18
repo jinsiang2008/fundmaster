@@ -1,17 +1,20 @@
 ---
-description: 前端 React/TypeScript 编码规范
+description: 前端 React/TypeScript 规则与本地列表边界
 globs: frontend/src/**/*.{ts,tsx}
 alwaysApply: false
 ---
 
-- React 19 + TypeScript strict mode
+- React 19 + TypeScript strict mode + react-router-dom v7
 - UI 组件库: Ant Design 6（antd6 API，非 antd5）
 - 数据查询: TanStack Query 5，在 hooks/ 中封装 custom hooks
 - API 调用: 统一通过 api/client.ts，不在组件中直接 fetch/axios
 - 类型定义: 放在 types/ 目录，不在组件文件中内联定义 interface
-- 路由: react-router-dom v7，新页面加到 App.tsx 的 Routes 中
+- 路由: 新页面加到 App.tsx 的 Routes 中
 - 图表: 使用 echarts-for-react，不引入其他图表库
 - 状态管理: 优先 TanStack Query 缓存 + React state，无需 Redux/Zustand
 - 组件模式: 函数组件 + hooks，不使用 class 组件
+- `useLocalFundLists.ts` / `utils/storage.ts` 只管理 watchlist/recent，不代表用户真实持仓或组合分析
+- 改本地存储/订阅逻辑时保持快照引用稳定，避免再次引入无限重渲染/白屏
 - 样式: 优先 antd 内置样式/token，必要时用 CSS Modules
+- 若改动前端入口能力或本地数据边界，同步更新 `AGENTS.md` / `docs/memory.md`
 - lint: `npm run lint`，build: `npm run build`（含 tsc 类型检查）

@@ -1,15 +1,19 @@
 ---
-description: 部署与运维关键事实
+description: 部署、局域网远端运行与排障事实
 globs: docker-compose*.yml,**/Dockerfile*,**/nginx.conf,scripts/**
 alwaysApply: false
 ---
 
 - 开发: docker-compose.yml（backend 热重载 + frontend dev server）
 - 生产: docker-compose.prod.yml（Nginx 同域反代，静态资源 + /api 转发）
-- 环境变量: deploy.env（生产），backend/.env（开发）
+- 局域网远端: `scripts/deploy-remote-192.sh`（rsync + venv + `vite preview`），当前主机/IP 以 `docs/memory.md` 为准
+- 环境变量: deploy.env（Docker 生产），backend/.env（开发/局域网运行）
 - Nginx: frontend/nginx.conf，/api 反代到 backend:8000，已关闭 proxy_buffering（SSE 需要）
 - 后端镜像: python:3.11-slim，入口 uvicorn app.main:app
 - 前端镜像: Node 构建阶段 + nginx:alpine 运行阶段
-- 远端部署: scripts/deploy-remote-192.sh（rsync 方式）
 - 健康检查: GET /health → {"status": "healthy"}
+- 若只测 `/health`，可能误命中别的本地服务；排障时再加 `GET /api/funds/featured?limit=3` 确认是 FundMaster
+- 局域网 curl 若被本机代理劫持，使用 `NO_PROXY` 或 `curl --noproxy '*'`
+- 远端 IP 变化后，记得同步更新远端 `frontend/.env` 的 `VITE_API_URL` 与 `backend/.env` 的 `CORS_ORIGINS`
+- 非交互 shell 下可能找不到 `npx`；远端启动前端优先用 `./node_modules/.bin/vite preview` 或显式补 PATH
 - 关键环境变量: DEEPSEEK_API_KEY, LLM_PROVIDER, CORS_ORIGINS, HTTP_PORT

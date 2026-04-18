@@ -1,14 +1,18 @@
 ---
-description: FundMaster 项目全局上下文与核心约定
+description: FundMaster 项目全局上下文、能力边界与核心约定
 globs:
 alwaysApply: true
 ---
 
 - 项目: FundMaster — AI 驱动的中国公募基金智能分析平台
-- 语言偏好: 代码/注释/变量用英文，UI 文案/用户可见文本用中文
 - 回复语言: 始终用中文（简体）回复
-- 架构: 前后端分离，FastAPI (Python 3.11) + Vite/React 19 (TypeScript)
+- 语言偏好: 代码/注释/变量用英文，UI/用户可见文本用中文
+- 技术栈: FastAPI (Python 3.11) + Vite/React 19 + TypeScript + Ant Design 6
+- 当前能力: 搜索/详情/净值/持仓/指标、AI 分析、对话、多基对比、定投模拟、规则化选基、watchlist/recent
+- 架构: 前后端分离
 - 分层: config → schemas → services → routers → main（禁止反向依赖）
-- 安全: 绝不提交 .env / API Key / 密码到 Git
 - 数据流: 所有外部数据通过 backend 代理，前端不直接调外部 API
-- 参考 AGENTS.md 获取完整架构信息
+- 能力边界: repo 内不保存用户真实持仓；前端只维护 watchlist/recent
+- 多工具边界: 用户私有 OpenClaw managed skill 可能会调用 FundMaster API，但不在 repo 内维护
+- 安全: 绝不提交 .env / API Key / 密码到 Git
+- 参考 `AGENTS.md` 获取完整架构，参考 `docs/memory.md` 获取近期运行事实和坑点
